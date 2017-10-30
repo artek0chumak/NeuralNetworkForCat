@@ -3,150 +3,196 @@ import pickle
 import matplotlib.pyplot as plt
 
 def sigmoid(X):
-
     return 1/(1 + np.exp(X))
 
-def load_data_set():
+
+def relu(X):
+    return np.maximum(X, 0)
+
+
+def tanh(X):
+    return np.tanh(X)
+
+
+def der_sigmoid(X):
+    return np.multiply(sigmoid(X), (1 - sigmoid(X)))
+
+
+def der_relu(X):
+    X[X <= 0] = 0
+    X[X > 0] = 1
+    return X
+
+
+def der_tanh(X):
+    return 1 / np.square(np.cosh(X))
+
+
+def load_train_set():
     X_ = list()
     Y_ = list()
     for i in range(5):
         with open('cifar-10-batches-py/data_batch_{0}'.format(i + 1), 'rb') as img:
             data = pickle.load(img, encoding='bytes')
-        with open('cifar-10-batches-py/batches.meta'.format(i + 1), 'rb') as lb:
-            labels = pickle.load(lb, encoding='bytes')
         for j in range(10000):
             X_.append(data[b'data'][j])
-            Y_.append(data[b'labels'][j])
+            if(data[b'labels'][j] == '2' or data[b'labels'][j] == '3' or data[b'labels'][j] == '5' or data[b'labels'][j] == '6') :
+                Y_.append(1)
+            else:
+                Y_.append(0)
 
     return np.array(X_).T, np.array(Y_).reshape((1, 50000))
 
-def initialize_parameters(n_x, n_h1, n_h2, n_y):
-    W1 = np.random.rand(n_h1, n_x) * 0.0001
-    b1 = np.zeros((n_h1, 1))
-    W2 = np.random.rand(n_h2, n_h1) * 0.0001
-    b2 = np.zeros((n_h2, 1))
-    W3 = np.random.rand(n_y, n_h2) * 0.0001
-    b3 = np.zeros((n_y, 1))
 
-    assert (W1.shape == (n_h1, n_x))
-    assert (b1.shape == (n_h1, 1))
-    assert (W2.shape == (n_h2, n_h1))
-    assert (b2.shape == (n_h2, 1))
-    assert (W3.shape == (n_y, n_h2))
-    assert (b3.shape == (n_y, 1))
+def load_test_set():
+    X_ = list()
+    Y_ = list()
+    with open('cifar-10-batches-py/test_batch') as img:
+        data = pickle.load(img, encoding='bytes')
+    for i in range(10000):
+        X_.append(data[b'data'][i])
+        if (data[b'labels'][i] == '2' or data[b'labels'][i] == '3' or data[b'labels'][i] == '5' or data[b'labels'][i] == '6'):
+            Y_.append(1)
+        else:
+            Y_.append(0)
 
-    parameters = {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2, 'W3' : W3, 'b3': b3}
+    return np.array(X_).T, np.array(Y_).reshape((1, 10000))
+
+
+def initialize_parameters(dim_layer):
+    parameters = {}
+    for l in range(1, len(dim_layer)):
+        parameters.update({'W' + str(l) : np.random.randn(dim_layer[l], dim_layer[l - 1]) * np.sqrt(2 / dim_layer[l - 1])})
+        parameters.update({'b' + str(l) : np.zeros((dim_layer[l], 1))})
 
     return parameters
 
+
+def linear_forward(A, W, b):
+    Z = np.dot(W, A) + b
+
+    cache = (A, W, b)
+
+    return Z, cache
+
+
+def linear_activation_forward(A_prev, W, b, activation):
+
+    if activation == "sigmoid":
+        Z, linear_cache = linear_forward(A_prev, W, b)
+        A, activation_cache = sigmoid(Z), Z
+
+    elif activation == "relu":
+        Z, linear_cache = linear_forward(A_prev, W, b)
+        A, activation_cache = relu(Z), Z
+
+    elif activation == "tanh":
+        Z, linear_cache = linear_forward(A_prev, W, b)
+        A, activation_cache = tanh(Z), Z
+
+    cache = (linear_cache, activation_cache)
+
+    return A, cache
+
+
 def forward_propagation(X, parameters):
+    caches = []
+    A = X
+    L = len(parameters) // 2
 
-    W1 = parameters['W1']
-    b1 = parameters['b1']
-    W2 = parameters['W2']
-    b2 = parameters['b2']
-    W3 = parameters['W3']
-    b3 = parameters['b3']
+    for l in range(1, L):
+        A_prev = A
+        A, cache = linear_activation_forward(A_prev, parameters['W' + str(l)], parameters['b' + str(l)], "relu")
+        caches.append(cache)
+
+    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], "sigmoid")
+    caches.append(cache)
+
+    return AL, caches
 
 
-    Z1 = np.dot(W1, X) + b1
-    A1 = np.maximum(0, Z1)
-    Z2 = np.dot(W2, A1) + b2
-    A2 = np.maximum(0, Z2)
-    Z3 = np.dot(W3, A2) + b3
-    A3 = np.maximum(0,Z3)
-
-    assert (A3.shape == (1, X.shape[1]))
-
-    cache = {'Z1': Z1, 'A1': A1, 'Z2': Z2, 'A2': A2, 'Z3' : Z3, 'A3' : A3}
-
-    return A3, cache
-
-def compute_cost(A3, Y, parameters):
+def compute_cost(AL, Y, parameters):
     m = Y.shape[1]
 
-    sqr = np.square(Y - A3)
-    cost = np.sum(sqr) / m
+    precost = np.square(Y - AL)
+    cost = np.sum(precost) / m
 
     cost = np.squeeze(cost)
-    assert (isinstance(cost, float))
+
     return cost
 
-def d_max(x):
 
-    x[x <= 0] = 0
-    x[x > 0] = 1
+def linear_backward(dZ, cache):
 
-    return x
+    A_prev, W, b = cache
+    m = A_prev.shape[1]
 
-def backward_propagation(parameters, cache, X, Y):
+    dW = np.dot(dZ, A_prev.T) / m
+    db = np.sum(dZ, axis=1, keepdims=True) / m
+    dA_prev = np.dot(W.T, dZ)
 
-    m = X.shape[1]
-    W2 = parameters['W2']
-    W3 = parameters['W3']
-    A1 = cache['A1']
-    A2 = cache['A2']
-    A3 = cache['A3']
-    Z1 = cache['Z1']
-    Z2 = cache['Z2']
+    return dA_prev, dW, db
 
-    dA3 = 2*(A3 - Y)
-    dZ3 = np.multiply(dA3, np.multiply(A3, (1 - A3)))
-    dW3 = np.dot(dZ3, A2.T) / m
-    db3 = np.sum(dZ3, axis=1, keepdims=True)
-    dA2 = np.dot(W3.T, dZ3)
-    dZ2 = np.multiply(dA2, d_max(Z2))
-    dW2 = np.dot(dZ2, A1.T) / m
-    db2 = np.sum(dZ2, axis=1, keepdims=True) / m
-    dA1 = np.dot(W2.T, dZ2)
-    dZ1 = np.multiply(dA1, d_max(Z1))
-    dW1 = np.dot(dZ1, X.T) / m
-    db1 = np.sum(dZ1, axis=1, keepdims=True) / m
 
-    grads = {'dW1': dW1, 'db1': db1, 'dW2': dW2, 'db2': db2, 'dW3': dW3, 'db3': db3}
+def linear_activation_backward(dA, cache, activation):
+
+    linear_cache, activation_cache = cache
+
+    if activation == "relu":
+        dZ = der_relu(dA)
+        dA_prev, dW, db = linear_backward(dZ, linear_cache)
+
+    elif activation == "sigmoid":
+        dZ = der_sigmoid(dA)
+        dA_prev, dW, db = linear_backward(dZ, linear_cache)
+
+    elif activation == "tanh":
+        dZ = der_tanh(dA)
+        dA_prev, dW, db = linear_backward(dZ, linear_cache)
+
+    return dA_prev, dW, db
+
+
+def backward_propagation(AL, Y, caches):
+    grads = {}
+    Y = Y.reshape(AL.shape)
+
+    dAL = 2 * (AL - Y)
+
+    current_cache = caches[len(caches) - 1]
+    grads["dA" + str(len(caches))], grads["dW" + str(len(caches))], grads["db" + str(len(caches))] \
+        = linear_activation_backward(dAL, current_cache, activation="sigmoid")
+
+    for l in reversed(range(len(caches) - 1)):
+        current_cache = caches[l]
+        dA_prev_temp, dW_temp, db_temp = linear_activation_backward(grads['dA' + str(l + 2)], current_cache,
+                                                                    activation="relu")
+        grads["dA" + str(l + 1)] = dA_prev_temp
+        grads["dW" + str(l + 1)] = dW_temp
+        grads["db" + str(l + 1)] = db_temp
+
 
     return grads
 
+
 def update_parameters(parameters, grads, learning_rate=0.0000002):
-    W1 = parameters['W1']
-    b1 = parameters['b1']
-    W2 = parameters['W2']
-    b2 = parameters['b2']
-    W3 = parameters['W3']
-    b3 = parameters['b3']
-
-    dW1 = grads['dW1']
-    db1 = grads['db1']
-    dW2 = grads['dW2']
-    db2 = grads['db2']
-    dW3 = grads['dW3']
-    db3 = grads['db3']
-
-    W1 = W1 - dW1 * learning_rate
-    b1 = b1 - db1 * learning_rate
-    W2 = W2 - dW2 * learning_rate
-    b2 = b2 - db2 * learning_rate
-    W3 = W3 - dW3 * learning_rate
-    b3 = b3 - db3 * learning_rate
-
-    parameters = {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2, 'W3': W3, 'b3': b3}
+    for l in range(len(parameters) // 2):
+        parameters["W" + str(l + 1)] = parameters["W" + str(l + 1)] - learning_rate * grads["dW" + str(l + 1)]
+        parameters["b" + str(l + 1)] = parameters["b" + str(l + 1)] - learning_rate * grads["db" + str(l + 1)]
 
     return parameters
 
-def nn_model(X, Y, n_h1, n_h2, num_iteration=10000, print_cost=False):
-    n_x = X.shape[0]
-    n_y = Y.shape[0]
 
-    parameters = initialize_parameters(n_x, n_h1, n_h2, n_y)
+def nn_model(X, Y, layers_dims, num_iteration=10000, print_cost=False, learning_rate=0.002):
+    parameters = initialize_parameters(layers_dims)
 
     for i in range(num_iteration):
+        AL, caches = forward_propagation(X, parameters)
+        cost = compute_cost(AL, Y, parameters)
+        grads = backward_propagation(AL, Y, caches)
+        parameters = update_parameters(parameters, grads, learning_rate)
 
-        A3, cache = forward_propagation(X, parameters)
-        cost = compute_cost(A3, Y, parameters)
-        grads = backward_propagation(parameters, cache, X, Y)
-        parameters = update_parameters(parameters, grads)
-
-        if print_cost and i % 10 == 0:
+        if print_cost and i % 3 == 0:
             print("Cost after iteration {0}: {1}".format(i, cost))
 
     return parameters
