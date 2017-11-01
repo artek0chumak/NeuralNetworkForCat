@@ -2,4 +2,4 @@ import core
 
 X, Y = core.load_train_set()
 
-print(core.nn_model(X, Y, layers_dims=[3072, 20, 5, 1], print_cost=True, learning_rate=1.2))
+print(core.nn_model(X, Y, layers_dims=[3072, 300, 100, 50, 20, 7, 1], print_cost=True, learning_rate=0.000000002))

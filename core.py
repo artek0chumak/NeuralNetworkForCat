@@ -36,10 +36,7 @@ def load_train_set():
             data = pickle.load(img, encoding='bytes')
         for j in range(10000):
             X_.append(data[b'data'][j])
-            if(data[b'labels'][j] == '2' or data[b'labels'][j] == '3' or data[b'labels'][j] == '5' or data[b'labels'][j] == '6') :
-                Y_.append(1)
-            else:
-                Y_.append(0)
+            Y_.append(data[b'labels'][j] / 11.0)
 
     return np.array(X_).T, np.array(Y_).reshape((1, 50000))
 
@@ -51,10 +48,7 @@ def load_test_set():
         data = pickle.load(img, encoding='bytes')
     for i in range(10000):
         X_.append(data[b'data'][i])
-        if (data[b'labels'][i] == '2' or data[b'labels'][i] == '3' or data[b'labels'][i] == '5' or data[b'labels'][i] == '6'):
-            Y_.append(1)
-        else:
-            Y_.append(0)
+        Y_.append(data[b'labels'][i] / 11.0)
 
     return np.array(X_).T, np.array(Y_).reshape((1, 10000))
 
@@ -114,7 +108,7 @@ def forward_propagation(X, parameters):
 def compute_cost(AL, Y, parameters):
     m = Y.shape[1]
 
-    precost = np.square(Y - AL)
+    precost = np.square(AL - Y)
     cost = np.sum(precost) / m
 
     cost = np.squeeze(cost)
