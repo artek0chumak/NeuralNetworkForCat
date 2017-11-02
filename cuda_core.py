@@ -46,9 +46,11 @@ def der_sigmoid(X) :
 
 
 def der_relu(X) :
-    X[X <= 0] = 0
-    X[X > 0] = 1
-    return X
+    X1 = cm.CUDAMatrix(X)
+
+    X1.greater_than(0)
+
+    return X1.asarray()
 
 
 def der_tanh(X) :
@@ -260,7 +262,7 @@ def nn_model(X, Y, layers_dims, num_iteration=10000, print_cost=False, learning_
         grads = backward_propagation(AL, Y, caches)
         parameters = update_parameters(parameters, grads, learning_rate)
 
-        if print_cost and i % 100 == 0:
+        if print_cost and i % 5 == 0:
             print("Cost after iteration {0}: {1}".format(i, cost))
 
     return parameters
