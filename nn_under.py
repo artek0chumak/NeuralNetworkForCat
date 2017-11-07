@@ -14,12 +14,16 @@ def initialize_parameters(dim_layer):
 def linear_forward(A, W, b):
     W1 = cm.CUDAMatrix(W)
     A1 = cm.CUDAMatrix(A)
-    b1 = cm.CUDAMatrix(b)
-    Z1 = cm.empty((W.shape[0], 1))
     Z1 = cm.dot(W1, A1)
+    W1.free_device_memory()
+    A1.free_device_memory()
+
+    b1 = cm.CUDAMatrix(b)
     Z1.add_col_vec(b1)
+    b1.free_device_memory()
 
     Z = Z1.asarray()
+    Z1.free_device_memory()
 
     cache = (A, W, b)
 
@@ -78,10 +82,10 @@ def compute_cost(AL, Y, parameters, l=0):
     for i in range(len(W1)) :
         L2_regularization += np.squeeze(cm.pow(W1[i], 2).sum(axis=0).sum(axis=1).asarray())
 
-
     L2_regularization *= l / m / 2
 
-    cost1 = cm.log(AL1).mult(Y1).add(cm.log(cm.CUDAMatrix(np.ones(AL.shape)).subtract(AL1)).mult(cm.CUDAMatrix(np.ones(Y.shape)).subtract(Y1)))
+    cost1 = cm.log(AL1).mult(Y1).add(cm.log(cm.CUDAMatrix(np.ones(AL.shape)).subtract(AL1))
+                                     .mult(cm.CUDAMatrix(np.ones(Y.shape)).subtract(Y1)))
     cost = np.squeeze(cost1.sum(axis=1).divide(m).asarray()) + L2_regularization
 
     return -cost.sum()
@@ -93,22 +97,25 @@ def linear_backward(dZ, cache, l=0):
     m = A_prev.shape[1]
 
     A_prev1 = cm.CUDAMatrix(A_prev)
+    dZ1 = cm.CUDAMatrix(dZ)
+    dW1 = cm.dot(dZ1, A_prev1.transpose()).divide(m)
+    A_prev1.free_device_memory()
+
     W1 = cm.CUDAMatrix(W)
     Wl = cm.CUDAMatrix(W).mult(l)
-    b1 = cm.CUDAMatrix(b)
-    dA_prev1 = cm.empty(A_prev.shape)
-    dW1 = cm.empty(W.shape)
-    db1 = cm.empty(b.shape)
-    dZ1 = cm.CUDAMatrix(dZ)
-
-    dW1 = cm.dot(dZ1, A_prev1.transpose()).divide(m)
     dW1.add(Wl.divide(m))
+    Wl.free_device_memory()
+
     db1 = dZ1.sum(axis = 1).divide(m)
     dA_prev1 = cm.dot(W1.transpose(), dZ1)
 
     dA_prev = dA_prev1.asarray()
     dW = dW1.asarray()
     db = db1.asarray()
+
+    dA_prev1.free_device_memory()
+    dW1.free_device_memory()
+    db1.free_device_memory()
 
     return dA_prev, dW, db
 

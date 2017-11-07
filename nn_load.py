@@ -8,7 +8,8 @@ def load_set_class(file):
         with open(i, 'rb') as img:
             data = pickle.load(img, encoding='bytes')
         for j in range(len(data[b'data'])):
-            X_.append(data[b'data'][j])
+            m = np.max(data[b'data'])
+            X_.append(data[b'data'][j] / m)
             a = [0]*(max(data[b'labels']) - min(data[b'labels']) + 1)
             a[data[b'labels'][j]] = 1
             Y_.append(a)
