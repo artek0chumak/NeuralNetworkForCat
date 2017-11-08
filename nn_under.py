@@ -11,9 +11,14 @@ def initialize_parameters(dim_layer):
     return parameters
 
 
-def linear_forward(A, W, b):
+def linear_forward(A, W, b, keep_prob):
+    D = np.random.rand(A.shape[0], A.shape[1])
+    D = D / np.max(D)
+    D = D <= keep_prob
+    D1 = cm.CUDAMatrix(D)
     W1 = cm.CUDAMatrix(W)
-    A1 = cm.CUDAMatrix(A)
+    A1 = cm.CUDAMatrix(A).mult(D1)
+    D1.free_device_memory()
     Z1 = cm.dot(W1, A1)
     W1.free_device_memory()
     A1.free_device_memory()
@@ -25,23 +30,23 @@ def linear_forward(A, W, b):
     Z = Z1.asarray()
     Z1.free_device_memory()
 
-    cache = (A, W, b)
+    cache = (A, W, b, D)
 
     return Z, cache
 
 
-def linear_activation_forward(A_prev, W, b, activation):
+def linear_activation_forward(A_prev, W, b, activation, keep_prob):
 
     if activation == "sigmoid":
-        Z, linear_cache = linear_forward(A_prev, W, b)
+        Z, linear_cache = linear_forward(A_prev, W, b, keep_prob)
         A, activation_cache = nn_mat.sigmoid(Z), Z
 
     elif activation == "relu":
-        Z, linear_cache = linear_forward(A_prev, W, b)
+        Z, linear_cache = linear_forward(A_prev, W, b, keep_prob)
         A, activation_cache = nn_mat.relu(Z), Z
 
     elif activation == "tanh":
-        Z, linear_cache = linear_forward(A_prev, W, b)
+        Z, linear_cache = linear_forward(A_prev, W, b, keep_prob)
         A, activation_cache = nn_mat.tanh(Z), Z
 
     cache = (linear_cache, activation_cache)
@@ -49,17 +54,17 @@ def linear_activation_forward(A_prev, W, b, activation):
     return A, cache
 
 
-def forward_propagation(X, parameters):
+def forward_propagation(X, parameters, keep_prob):
     caches = []
     A = X
     L = len(parameters) // 2
 
     for l in range(1, L):
         A_prev = A
-        A, cache = linear_activation_forward(A_prev, parameters['W' + str(l)], parameters['b' + str(l)], "relu")
+        A, cache = linear_activation_forward(A_prev, parameters['W' + str(l)], parameters['b' + str(l)], "relu", keep_prob)
         caches.append(cache)
 
-    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], "sigmoid")
+    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], "sigmoid", keep_prob)
     caches.append(cache)
 
     return AL, caches
@@ -93,7 +98,7 @@ def compute_cost(AL, Y, parameters, l=0):
 
 def linear_backward(dZ, cache, l=0):
 
-    A_prev, W, b = cache
+    A_prev, W, b, D = cache
     m = A_prev.shape[1]
 
     A_prev1 = cm.CUDAMatrix(A_prev)
@@ -107,7 +112,9 @@ def linear_backward(dZ, cache, l=0):
     Wl.free_device_memory()
 
     db1 = dZ1.sum(axis = 1).divide(m)
-    dA_prev1 = cm.dot(W1.transpose(), dZ1)
+    D1 = cm.CUDAMatrix(D)
+    dA_prev1 = cm.dot(W1.transpose(), dZ1).mult(D1)
+    D1.free_device_memory()
 
     dA_prev = dA_prev1.asarray()
     dW = dW1.asarray()
@@ -176,3 +183,5 @@ def update_parameters(parameters, grads, learning_rate=0.0000002):
 
 
     return parameters
+
+

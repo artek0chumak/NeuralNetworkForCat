@@ -7,11 +7,11 @@ def load_set_class(file):
     for i in file:
         with open(i, 'rb') as img:
             data = pickle.load(img, encoding='bytes')
+        m = max(data[b'fine_labels']) - min(data[b'fine_labels']) + 1
         for j in range(len(data[b'data'])):
-            m = np.max(data[b'data'])
-            X_.append(data[b'data'][j] / m)
-            a = [0]*(max(data[b'labels']) - min(data[b'labels']) + 1)
-            a[data[b'labels'][j]] = 1
+            X_.append(data[b'data'][j])
+            a = [0] * m
+            a[data[b'fine_labels'][j]] = 1
             Y_.append(a)
 
     return np.array(X_).T, np.array(Y_).reshape((len(a), len(file) * len(data[b"data"])))
